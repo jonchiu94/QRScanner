@@ -18,22 +18,33 @@ import com.google.android.gms.vision.CameraSource;
 import com.google.android.gms.vision.Detector;
 import com.google.android.gms.vision.barcode.Barcode;
 import com.google.android.gms.vision.barcode.BarcodeDetector;
+import android.telephony.PhoneNumberUtils;
 import java.io.IOException;
 
 public class ScannedQRActivity extends AppCompatActivity{
     SurfaceView surfaceView;
     TextView txtQRValue;
     private BarcodeDetector barcodeDetector;
+    private PhoneNumberUtils phone;
     private CameraSource cameraSource;
     private static final int REQUEST_CAMERA_PERMISSION = 201;
     Button btnAction;
     String intentData = "";
+    boolean isPhoneNum = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState){
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_scan_qr);
         initViews();
+    }
+    protected void onPause(){
+        super.onPause();
+        cameraSource.release();
+    }
+    protected void onResume(){
+        super.onResume();
+        initialiseDetectorsAndSources();
     }
     private void initViews() {
         txtQRValue = findViewById(R.id.txtBarcodeValue);
@@ -43,7 +54,12 @@ public class ScannedQRActivity extends AppCompatActivity{
         btnAction.setOnClickListener(new View.OnClickListener(){
             public void onClick(View v){
                 if (intentData.length() > 0) {
-                    startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(intentData)));
+                    if(isPhoneNum){
+                        isPhoneNum = false;
+                        startActivity(new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + intentData)));
+                    } else {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(intentData)));
+                    }
                 }
             }
         });
@@ -69,36 +85,36 @@ public class ScannedQRActivity extends AppCompatActivity{
                     e.printStackTrace();
                 }
             }
-            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-            }
+            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) { }
             public void surfaceDestroyed(SurfaceHolder holder){
                 cameraSource.stop();
             }
         });
         barcodeDetector.setProcessor(new Detector.Processor<Barcode>(){
             public void release(){
-                Toast.makeText(getApplicationContext(), "Scanner has been stopped",  Toast.LENGTH_SHORT).show();
+                Toast.makeText(getApplicationContext(), "QR Scanner has been stopped",  Toast.LENGTH_SHORT).show();
             }
             public void receiveDetections(Detector.Detections<Barcode> detections) {
                 final SparseArray<Barcode> barcodes = detections.getDetectedItems();
                 if (barcodes.size() != 0) {
                     txtQRValue.post(new Runnable() {
                         public void run() {
-                            btnAction.setText("launch URL");
-                            intentData = barcodes.valueAt(0).displayValue;
-                            txtQRValue.setText(intentData);
+                            isPhoneNum = false;
+                            if(phone.isGlobalPhoneNumber(barcodes.valueAt(0).displayValue)){
+                                isPhoneNum = true;
+                                btnAction.setText("Call");
+                                intentData = barcodes.valueAt(0).displayValue;
+                                txtQRValue.setText(intentData);
+                            }else {
+                                btnAction.setText("launch URL");
+                                intentData = barcodes.valueAt(0).displayValue;
+                                txtQRValue.setText(intentData);
+                            }
                         }
                     });
                 }
             }
         });
     }
-    protected void onPause(){
-        super.onPause();
-        cameraSource.release();
-    }
-    protected void onResume(){
-        super.onResume();
-        initialiseDetectorsAndSources();
-    }
+
 }
